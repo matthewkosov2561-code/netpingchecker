@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>REDNET — Accurate Network Test</title>
+<style>
+:root{--r:#ff2525;--bg:#060606;--card:#101010;--card2:#0b0b0b;--line:#292929;--muted:#777}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% -5%,#460000,transparent 40%),#060606;color:#fff;font-family:Inter,system-ui,Arial;display:grid;place-items:center}
+.app{width:min(860px,93vw);padding:35px 0}.brand{font-size:39px;font-weight:950;letter-spacing:-2px}.brand span{color:var(--r)}.sub{color:#777;margin:5px 0 26px}
+.panel{background:linear-gradient(145deg,#151515,#090909);border:1px solid var(--line);border-radius:26px;padding:30px;box-shadow:0 25px 80px #000;position:relative}.panel:before{content:"";position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--r),transparent)}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.status{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:#aaa}.dot{display:inline-block;width:7px;height:7px;background:#4ee58a;border-radius:50%;margin-right:7px;box-shadow:0 0 9px #4ee58a}.method{font-size:10px;color:#666;border:1px solid #292929;border-radius:99px;padding:7px 10px}
+.center{text-align:center}button{width:180px;height:180px;border-radius:50%;border:1px solid #ff6767;background:radial-gradient(circle at 35% 25%,#ff5050,#df0e0e 58%,#9c0000);color:white;font-size:19px;font-weight:950;letter-spacing:.1em;cursor:pointer;box-shadow:inset 0 2px 2px #fff5,0 0 0 9px #270606,0 0 0 10px #4b0b0b,0 18px 55px #e0000044;transition:.18s}
+button:hover{transform:translateY(-3px) scale(1.025)}button:disabled{opacity:.7;cursor:wait}
+#state{margin:27px 0 12px;color:#999;font-size:13px;min-height:20px}.progress{height:4px;background:#1d1d1d;border-radius:9px;overflow:hidden;margin-bottom:25px}.bar{height:100%;width:0;background:var(--r);box-shadow:0 0 12px var(--r);transition:width .25s}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}.stat{background:#0b0b0b;border:1px solid #252525;border-radius:15px;padding:17px}.label{font-size:10px;color:#6e6e6e;text-transform:uppercase;letter-spacing:.12em;font-weight:800}.value{font-size:24px;font-weight:900;margin-top:8px}.good{color:#51e28d}.warn{color:#ffd166}.bad{color:#ff5555}.explain{margin-top:18px;padding:12px 14px;border:1px solid #202020;border-radius:12px;background:#090909;color:#666;font-size:11px;line-height:1.5}
+@media(max-width:650px){.panel{padding:23px 17px}.grid{grid-template-columns:repeat(2,1fr)}.brand{font-size:32px}}
+</style>
+</head>
+<body>
+<main class="app">
+<div class="brand">RED<span>NET</span></div><div class="sub">Accurate browser network check</div>
+<section class="panel">
+<div class="top"><div class="status"><i class="dot"></i>Network ready</div><div class="method">Repeated measurements</div></div>
+<div class="center"><button id="test">TEST WIFI</button><div id="state">Measures several samples before giving a result</div></div>
+<div class="progress"><div id="bar" class="bar"></div></div>
+<div class="grid">
+<div class="stat"><div class="label">Internet latency</div><div id="ping" class="value">—</div></div>
+<div class="stat"><div class="label">Jitter</div><div id="jitter" class="value">—</div></div>
+<div class="stat"><div class="label">Packet loss</div><div id="loss" class="value">—</div></div>
+<div class="stat"><div class="label">Download</div><div id="speed" class="value">—</div></div>
+<div class="stat"><div class="label">Connection</div><div id="type" class="value">—</div></div>
+<div class="stat"><div class="label">Status</div><div id="online" class="value">—</div></div>
+</div>
+<div class="explain">This page cannot access your router's private Wi-Fi radio data or send true ICMP packets. Latency shown here is measured to a nearby internet endpoint, so it is not falsely labeled as router or game ping.</div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id),btn=$('test'),bar=$('bar');
+const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+const endpoint='https://speed.cloudflare.com/__down?bytes=1';
+const downloadURL='https://speed.cloudflare.com/__down?bytes=2000000';
+const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const cls=v=>v<=40?'good':v<=90?'warn':'bad';
+function setv(id,v,c=''){$(id).textContent=v;$(id).className='value '+c}
+async function sample(){
+  const t=performance.now();
+  try{await fetch(endpoint+'&x='+Math.random(),{cache:'no-store',mode:'cors'});return performance.now()-t}catch{return null}
+}
+async function speed(){
+  const t=performance.now();
+  try{
+    const r=await fetch(downloadURL+'&x='+Math.random(),{cache:'no-store',mode:'cors'});
+    const reader=r.body.getReader();let bytes=0;
+    while(1){const x=await reader.read();if(x.done)break;bytes+=x.value.length}
+    return bytes*8/((performance.now()-t)/1000)/1e6
+  }catch{return null}
+}
+async function run(){
+  btn.disabled=true;btn.textContent='TESTING';$('state').textContent='Testing internet latency…';bar.style.width='5%';
+  setv('online',navigator.onLine?'Online':'Offline',navigator.onLine?'good':'bad');
+  setv('type',conn?(conn.effectiveType||'Unknown').toUpperCase():'Unavailable');
+  const s=[];const total=10;
+  for(let i=0;i<total;i++){const v=await sample();if(v!==null)s.push(v);bar.style.width=(10+i*6)+'%';await new Promise(r=>setTimeout(r,100))}
+  if(s.length){
+    const a=avg(s),dif=s.length>1?avg(s.slice(1).map((v,i)=>Math.abs(v-s[i]))):0;
+    setv('ping',a.toFixed(0)+' ms',cls(a));setv('jitter',dif.toFixed(1)+' ms',dif<=10?'good':dif<=25?'warn':'bad');
+    const loss=(total-s.length)/total*100;setv('loss',loss.toFixed(0)+'%',loss===0?'good':loss<=10?'warn':'bad');
+  }else{setv('ping','Failed','bad');setv('jitter','—');setv('loss','100%','bad')}
+  $('state').textContent='Measuring download speed…';bar.style.width='75%';
+  const d=await speed();setv('speed',d?d.toFixed(1)+' Mbps':'Failed',d?(d>=50?'good':d>=10?'warn':'bad'):'bad');
+  bar.style.width='100%';$('state').textContent='Test complete';btn.textContent='TEST AGAIN';btn.disabled=false;
+}
+btn.onclick=run;
+</script>
+</body>
+</html>
